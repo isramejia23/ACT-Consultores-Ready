@@ -402,7 +402,7 @@
             </div>
         @endif
 
-        <form method="POST" action="{{ route('cliente.login') }}">
+        <form method="POST" action="{{ route('cliente.login.post') }}">
             @csrf
 
             <!-- Email -->

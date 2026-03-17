@@ -33,7 +33,7 @@ Route::post('login', [LoginController::class, 'login']);
 Route::post('logout', [LoginController::class, 'logout'])->name('logout');
 
 Route::get('cliente/login', [ClienteLoginController::class, 'showLoginForm'])->name('cliente.login');
-Route::post('cliente/login', [ClienteLoginController::class, 'login'])->name('cliente.login');
+Route::post('cliente/login', [ClienteLoginController::class, 'login'])->name('cliente.login.post');
 Route::post('cliente/logout', [ClienteLoginController::class, 'logout'])->name('cliente.logout');
 
 
