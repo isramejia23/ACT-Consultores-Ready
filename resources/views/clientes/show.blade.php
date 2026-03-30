@@ -107,6 +107,25 @@
         </div>
     </div>
 
+    <!-- Observaciones -->
+    @if($cliente->observaciones)
+    <div class="row mt-2">
+        <div class="col-12">
+            <div class="card shadow-sm mb-1">
+                <div class="card-header bg-primary text-white py-2 d-flex align-items-center justify-content-between">
+                    <h5 class="mb-0"><i class="bi bi-journal-text me-2"></i> Observaciones</h5>
+                    <a href="{{ route('clientes.edit', $cliente->id_clientes) }}" class="btn btn-sm btn-light">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                </div>
+                <div class="card-body py-3 px-4">
+                    <p class="mb-0" style="white-space: pre-wrap; font-size: 0.95rem;">{{ $cliente->observaciones }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    @endif
+
     <!-- Obligaciones y Trabajos del cliente -->
     <div class="row mt-4">
         <!-- Obligaciones (izquierda) -->

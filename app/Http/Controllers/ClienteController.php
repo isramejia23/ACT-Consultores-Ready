@@ -138,13 +138,14 @@ class ClienteController extends Controller
             'email_cliente' => 'required|string|email|unique:clientes',
             'password' => 'required|string|min:6',
             'direccion' => 'nullable|string',
+            'observaciones' => 'nullable|string|max:2000',
             'id_usuario' => 'required|exists:users,id',
         ],[
             'cedula_cliente.unique' => 'Esta cédula ya está registrada en nuestro sistema',
             'cedula_cliente.digits_between' => 'La cédula debe tener entre 10 y 13 dígitos',
             'email_cliente.unique'=>'Correo ya registrado en nuestro sistema'
         ]);
-        
+
         if ($validator->fails()) {
             return redirect()->route('clientes.create')
                             ->withErrors($validator)
@@ -169,6 +170,7 @@ class ClienteController extends Controller
                 'email_cliente' => $request->email_cliente,
                 'password' => Hash::make($request->password),
                 'direccion' => $request->direccion,
+                'observaciones' => $request->observaciones,
                 'id_usuario' => $request->id_usuario,
             ]);
 
@@ -229,6 +231,7 @@ class ClienteController extends Controller
             'email_cliente' => 'required|string|email|unique:clientes,email_cliente,' . $id_clientes . ',id_clientes',
             'password' => 'nullable|string|min:6',
             'direccion' => 'nullable|string',
+            'observaciones' => 'nullable|string|max:2000',
         ],[
             'cedula_cliente.unique' => 'Esta cédula ya está registrada en nuestro sistema',
             'cedula_cliente.digits_between' => 'La cédula debe tener entre 10 y 13 dígitos',
@@ -262,6 +265,7 @@ class ClienteController extends Controller
             'saldo' => $request->saldo,
             'email_cliente' => $request->email_cliente,
             'direccion' => $request->direccion,
+            'observaciones' => $request->observaciones,
         ];
     
         // Solo actualizar password si se proporcionó uno nuevo
@@ -348,12 +352,21 @@ class ClienteController extends Controller
             ->post($urlText, $payload);
 
             if ($response->successful()) {
+                if ($request->ajax()) {
+                    return response()->json(['success' => true, 'message' => 'Mensaje enviado exitosamente.']);
+                }
                 return back()->with('success', 'Mensaje enviado exitosamente.');
             }
 
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Error al enviar: ' . $response->body()]);
+            }
             return back()->with('error', 'Error al enviar el mensaje: ' . $response->body());
 
         } catch (\Exception $e) {
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Error de conexión: ' . $e->getMessage()]);
+            }
             return back()->with('error', 'Error de conexión: ' . $e->getMessage());
         }
     }

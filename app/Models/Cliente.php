@@ -29,6 +29,7 @@ class Cliente extends Model implements \Illuminate\Contracts\Auth\Authenticatabl
         'password',  // Asegúrate de que el campo password esté en $fillable
         'direccion',
         'claves',
+        'observaciones',
         'id_usuario',
     ];
 

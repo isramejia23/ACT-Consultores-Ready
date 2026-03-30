@@ -541,7 +541,7 @@
             }).then(function(result) {
                 if (!result.isConfirmed) return;
 
-                var csrfToken = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+                var csrfToken = '{{ csrf_token() }}';
                 fetch('/obligaciones/' + id + '/anular', {
                     method: 'PATCH',
                     headers: {
@@ -617,5 +617,97 @@
     </script>
     @endif
     @yield('scripts')
+
+<!-- Modal Global WhatsApp -->
+<div class="modal fade" id="modalWhatsApp" tabindex="-1" aria-labelledby="modalWhatsAppLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalWhatsAppLabel">
+                    <i class="bi bi-whatsapp me-2"></i> Enviar mensaje por WhatsApp
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-2">Para: <strong id="whatsappClienteNombre"></strong></p>
+                <textarea id="whatsappMensaje" class="form-control" rows="5" placeholder="Escribe tu mensaje..."></textarea>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-success" id="btnEnviarWhatsApp" onclick="enviarWhatsApp()">
+                    <i class="bi bi-send"></i> Enviar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    var _waClienteId = null;
+    var _waObligacionId = null;
+
+    function abrirWhatsApp(clienteNombre, clienteId, obligacionId) {
+        _waClienteId    = clienteId    || null;
+        _waObligacionId = obligacionId || null;
+        document.getElementById('whatsappClienteNombre').textContent = clienteNombre;
+        document.getElementById('whatsappMensaje').value = '';
+        new bootstrap.Modal(document.getElementById('modalWhatsApp')).show();
+    }
+
+    function enviarWhatsApp() {
+        var mensaje = document.getElementById('whatsappMensaje').value.trim();
+        if (!mensaje) {
+            Swal.fire({ icon: 'warning', title: 'Escribe un mensaje', showConfirmButton: false, timer: 1200 });
+            return;
+        }
+
+        var btn = document.getElementById('btnEnviarWhatsApp');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Enviando...';
+
+        var csrfToken = '{{ csrf_token() }}';
+        var url, body;
+
+        if (_waObligacionId !== null && _waObligacionId !== undefined) {
+            url  = '/vencimientos/notificar';
+            body = JSON.stringify({ vencimiento_id: _waObligacionId, mensaje: mensaje });
+        } else if (_waClienteId !== null && _waClienteId !== undefined) {
+            url  = '/notificar-cliente';
+            body = JSON.stringify({ id_cliente: _waClienteId, mensaje: mensaje });
+        } else {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo identificar el destinatario' });
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send"></i> Enviar';
+            return;
+        }
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'X-CSRF-TOKEN': csrfToken,
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            bootstrap.Modal.getInstance(document.getElementById('modalWhatsApp')).hide();
+            if (data.success) {
+                Swal.fire({ icon: 'success', title: 'Enviado', text: data.message, showConfirmButton: false, timer: 1800 });
+            } else {
+                Swal.fire({ icon: 'error', title: 'Error', text: data.message });
+            }
+        })
+        .catch(function() {
+            Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo conectar con el servidor' });
+        })
+        .finally(function() {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-send"></i> Enviar';
+        });
+    }
+</script>
 </body>
 </html>

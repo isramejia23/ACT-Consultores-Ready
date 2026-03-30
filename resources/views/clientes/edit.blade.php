@@ -143,9 +143,18 @@
                         </div>
 
                         <div class="form-floating mb-3 mt-3">
-                            <input type="text" name="claves" class="form-control" id="claves" 
+                            <input type="text" name="claves" class="form-control" id="claves"
                                    value="{{$cliente->claves }}" maxlength="200">
                             <label for="claves">Clave SRI</label>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="observaciones" class="form-label fw-semibold text-muted small" style="text-transform:uppercase;letter-spacing:.5px;">
+                                <i class="bi bi-journal-text me-1"></i> Observaciones
+                            </label>
+                            <textarea name="observaciones" id="observaciones" class="form-control" rows="4"
+                                      maxlength="2000" placeholder="Notas internas sobre el cliente...">{{ old('observaciones', $cliente->observaciones) }}</textarea>
+                            <div class="form-text text-end"><span id="obsCount">{{ strlen($cliente->observaciones ?? '') }}</span>/2000</div>
                         </div>
 
                         <div class="row g-3">
@@ -219,4 +228,16 @@
         border-color: #0a58ca;
     }
 </style>
+@endsection
+
+@section('scripts')
+<script>
+    var obsEl = document.getElementById('observaciones');
+    var obsCount = document.getElementById('obsCount');
+    if (obsEl && obsCount) {
+        obsEl.addEventListener('input', function() {
+            obsCount.textContent = this.value.length;
+        });
+    }
+</script>
 @endsection

@@ -622,10 +622,6 @@ document.addEventListener('DOMContentLoaded', function() {
             obligaciones = obligaciones.filter(function(ob) { return ob.id !== anulId; });
             refrescarCalendario();
             actualizarTablaCompletadas();
-
-            var modalEl = document.getElementById('modalObligacionesDia');
-            var modal = bootstrap.Modal.getInstance(modalEl);
-            if (modal) modal.hide();
         });
     };
 
@@ -689,7 +685,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     acciones = '<button class="btn btn-outline-primary btn-sm me-1" onclick="marcarCompletadoCal(' + ob.id + ')" title="Marcar completado"><i class="bi bi-check2-square"></i></button>';
                     acciones += '<button class="btn btn-outline-secondary btn-sm me-1" onclick="anularObligacionCal(' + ob.id + ')" title="Anular"><i class="bi bi-x-circle"></i></button>';
                     if (ob.cliente_telefono) {
-                        acciones += '<a href="https://wa.me/' + ob.cliente_telefono.replace(/[^0-9]/g, '') + '" target="_blank" class="btn btn-success btn-sm" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>';
+                        var nombre = (ob.cliente_nombre || '').replace(/'/g, "\\'");
+                        acciones += '<button class="btn btn-success btn-sm" onclick="abrirWhatsApp(\'' + nombre + '\', null, ' + ob.id + ')" title="WhatsApp"><i class="bi bi-whatsapp"></i></button>';
                     }
                 }
 
