@@ -519,40 +519,53 @@ class TareaController extends Controller
             $numero = '593' . substr($numero, 1); // Ecuador
         }
     
-        $domain  = rtrim(env('WHATSAPP_API_DOMAIN'), '/');
-        $instance = env('WHATSAPP_INSTANCE');
-        $urlText = "{$domain}/message/sendText/{$instance}";
-        $mensaje = $request->input('mensaje');
-    
-        // Construimos el mensaje de texto con la URL del archivo si existe
-        if ($tarea->archivo && Storage::disk('public')->exists($tarea->archivo)) {
-            $urlArchivo = asset("storage/{$tarea->archivo}");
-            $mensaje .= "\n\n📎 Puede descargar su archivo aquí: {$urlArchivo}";
+        $baseUrl = rtrim(env('WHATSAPP_API_URL'), '/');
+        $mensaje  = $request->input('mensaje');
+        $tieneArchivo = $tarea->archivo && Storage::disk('public')->exists($tarea->archivo);
+
+        if ($tieneArchivo) {
+            $url     = $baseUrl . '/send-document';
+            $base64  = base64_encode(Storage::disk('public')->get($tarea->archivo));
+            $filename = basename($tarea->archivo);
+            $payload = [
+                'numero'   => $numero,
+                'base64'   => $base64,
+                'filename' => $filename,
+                'caption'  => $mensaje,
+            ];
         } else {
-            $mensaje;
+            $url     = $baseUrl . '/send-message';
+            $payload = [
+                'numero'  => $numero,
+                'mensaje' => $mensaje,
+            ];
         }
-    
-        $payload = [
-            'number' => $numero,
-            'text'   => $mensaje,
-        ];
-    
+
         try {
             $response = Http::withHeaders([
-                'apikey'       => env('WHATSAPP_API_TOKEN'),
+                'x-api-key'    => env('WHATSAPP_API_TOKEN'),
                 'Content-Type' => 'application/json',
             ])
-            ->timeout(30)
-            ->post($urlText, $payload);
-    
+            ->timeout(60)
+            ->post($url, $payload);
+
             if ($response->successful()) {
                 $tarea->update(['notificado' => true]);
+                if ($request->ajax()) {
+                    return response()->json(['success' => true, 'message' => 'Mensaje enviado exitosamente.']);
+                }
                 return back()->with('success', 'Cliente notificado exitosamente.');
             }
-    
-            return back()->with('error', 'Error al enviar el mensaje: ' . $response->body());
-    
+
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Error al enviar: ' . $response->body()]);
+            }
+            return back()->with('error', 'Error al enviar: ' . $response->body());
+
         } catch (\Exception $e) {
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Error de conexión: ' . $e->getMessage()]);
+            }
             return back()->with('error', 'Error de conexión: ' . $e->getMessage());
         }
     }

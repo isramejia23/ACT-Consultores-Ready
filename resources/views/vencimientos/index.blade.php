@@ -426,7 +426,13 @@ document.addEventListener('DOMContentLoaded', function() {
                     acciones = '<button class="btn btn-outline-primary btn-sm me-1" onclick="marcarCompletadoVenc(' + ob.id + ')" title="Marcar completado"><i class="bi bi-check2-square"></i></button>';
                     acciones += '<button class="btn btn-outline-secondary btn-sm me-1" onclick="anularObligacionVenc(' + ob.id + ')" title="Anular"><i class="bi bi-x-circle"></i></button>';
                     if (ob.cliente_telefono) {
-                        acciones += '<a href="https://wa.me/' + ob.cliente_telefono.replace(/[^0-9]/g, '') + '" target="_blank" class="btn btn-success btn-sm" title="WhatsApp"><i class="bi bi-whatsapp"></i></a>';
+                        var msgDefault = 'Estimado/a ' + ob.cliente_nombre + ', le informamos que su obligacion ' + ob.tipo_nombre + ' esta proxima a vencer. Por favor contactese con nosotros para coordinar. Gracias.';
+                        acciones += '<button class="btn btn-success btn-sm" title="WhatsApp"'
+                            + ' data-nombre="' + (ob.cliente_nombre || '').replace(/"/g, '&quot;') + '"'
+                            + ' data-msg="' + msgDefault.replace(/"/g, '&quot;') + '"'
+                            + ' data-id="' + ob.id + '"'
+                            + ' onclick="abrirWhatsApp(this.dataset.nombre, null, parseInt(this.dataset.id), this.dataset.msg)">'
+                            + '<i class="bi bi-whatsapp"></i></button>';
                     }
                 }
 

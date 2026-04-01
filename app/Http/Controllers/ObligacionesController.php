@@ -99,12 +99,14 @@ class ObligacionesController extends Controller // <- renombrado de Vencimientos
         $obligacion = Obligacion::with(['cliente', 'tipoObligacion'])->find($request->input('vencimiento_id'));
 
         if (!$obligacion || !$obligacion->cliente) {
+            if ($request->ajax()) return response()->json(['success' => false, 'message' => 'No se encontró el cliente.']);
             return back()->with('error', 'No se encontró el vencimiento o el cliente asociado.');
         }
 
         $cliente = $obligacion->cliente;
 
         if (!$cliente->telefono_cliente) {
+            if ($request->ajax()) return response()->json(['success' => false, 'message' => 'El cliente no tiene WhatsApp registrado.']);
             return back()->with('error', 'El cliente no tiene un número de WhatsApp registrado.');
         }
 
@@ -114,35 +116,38 @@ class ObligacionesController extends Controller // <- renombrado de Vencimientos
             $numero = '593' . substr($numero, 1);
         }
 
-        $domain = rtrim(env('WHATSAPP_API_DOMAIN'), '/');
-        $instance = env('WHATSAPP_INSTANCE');
-        $urlText = "{$domain}/message/sendText/{$instance}";
-
+        $urlText = rtrim(env('WHATSAPP_API_URL'), '/') . '/send-message';
         $mensaje = $request->input('mensaje');
 
         $payload = [
-            'number' => $numero,
-            'text' => $mensaje,
+            'numero'  => $numero,
+            'mensaje' => $mensaje,
         ];
 
         try {
             $response = Http::withHeaders([
-                'apikey' => env('WHATSAPP_API_TOKEN'),
+                'x-api-key'    => env('WHATSAPP_API_TOKEN'),
                 'Content-Type' => 'application/json',
             ])
             ->timeout(30)
             ->post($urlText, $payload);
 
             if ($response->successful()) {
-                // Marcar como notificado (nota: obligaciones table doesnt have notificado yet but can be handled)
-                // $obligacion->update(['notificado' => true]);
-
+                if ($request->ajax()) {
+                    return response()->json(['success' => true, 'message' => 'Mensaje enviado a ' . $cliente->nombre_cliente]);
+                }
                 return back()->with('success', 'Mensaje enviado exitosamente a ' . $cliente->nombre_cliente);
             }
 
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Error al enviar: ' . $response->body()]);
+            }
             return back()->with('error', 'Error al enviar el mensaje: ' . $response->body());
 
         } catch (\Exception $e) {
+            if ($request->ajax()) {
+                return response()->json(['success' => false, 'message' => 'Error de conexión: ' . $e->getMessage()]);
+            }
             return back()->with('error', 'Error de conexión: ' . $e->getMessage());
         }
     }

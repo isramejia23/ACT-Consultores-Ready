@@ -328,20 +328,17 @@ class ClienteController extends Controller
             $numero = '593' . substr($numero, 1); // Ecuador
         }
 
-        $domain   = rtrim(env('WHATSAPP_API_DOMAIN'), '/');
-        $instance = env('WHATSAPP_INSTANCE');
-        $urlText  = "{$domain}/message/sendText/{$instance}";
-
+        $urlText = rtrim(env('WHATSAPP_API_URL'), '/') . '/send-message';
         $mensaje = $request->input('mensaje');
 
         $payload = [
-            'number' => $numero,
-            'text'   => $mensaje,
+            'numero'  => $numero,
+            'mensaje' => $mensaje,
         ];
 
         try {
             $response = Http::withHeaders([
-                'apikey'       => env('WHATSAPP_API_TOKEN'),
+                'x-api-key'    => env('WHATSAPP_API_TOKEN'),
                 'Content-Type' => 'application/json',
             ])
             ->timeout(30)
