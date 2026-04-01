@@ -274,11 +274,19 @@ class ClienteController extends Controller
             $datosActualizados['id_usuario'] = $request->id_usuario;
         }
     
-        // Detectar si cambió el régimen
+        // Detectar cambios antes de actualizar
         $regimenCambio = $cliente->regimen_id != $request->regimen_id;
+        $pasaAInactivo = $cliente->estado === 'Activo' && $request->estado === 'Inactivo';
 
         // Actualizar el cliente - el mutator setCedulaClienteAttribute se ejecutará automáticamente
         $cliente->update($datosActualizados);
+
+        // Si el cliente pasó a Inactivo, anular sus obligaciones pendientes
+        if ($pasaAInactivo) {
+            $cliente->obligaciones()
+                ->where('estado', 'pendiente')
+                ->update(['estado' => 'anulada']);
+        }
 
         // Si cambió el régimen, eliminar obligaciones de régimen pendientes y generar las nuevas
         if ($regimenCambio) {

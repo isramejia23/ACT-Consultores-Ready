@@ -34,6 +34,10 @@ class GeneradorVencimientos
         $mes = (int) now()->month;
         $anio = (int) now()->year;
 
+        if ($cliente->estado !== 'Activo') {
+            return 0;
+        }
+
         if (!$cliente->regimen) {
             return 0;
         }
