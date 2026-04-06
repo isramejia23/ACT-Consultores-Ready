@@ -494,6 +494,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var obligaciones = @json($obligaciones ?? []);
     var calendar;
     var csrfToken = '{{ csrf_token() }}';
+    var _mesActualYear  = {{ $currentYear }};
+    var _mesActualMonth = {{ $currentMonth }};
 
     function construirEventos() {
         var porFecha = {};
@@ -629,6 +631,18 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     };
 
+    function cargarObligacionesMes(year, month) {
+        fetch('/home/obligaciones?year=' + year + '&month=' + month, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            obligaciones = data;
+            refrescarCalendario();
+            actualizarTablaCompletadas();
+        });
+    }
+
     calendar = new FullCalendar.Calendar(calendarEl, {
         locale: 'es',
         initialView: 'dayGridMonth',
@@ -641,6 +655,15 @@ document.addEventListener('DOMContentLoaded', function() {
         buttonText: { today: 'Hoy', month: 'Mes', list: 'Lista' },
         height: 'auto',
         events: construirEventos(),
+        datesSet: function(info) {
+            var year  = info.view.currentStart.getFullYear();
+            var month = info.view.currentStart.getMonth() + 1;
+            if (year !== _mesActualYear || month !== _mesActualMonth) {
+                _mesActualYear  = year;
+                _mesActualMonth = month;
+                cargarObligacionesMes(year, month);
+            }
+        },
         eventClick: function(info) {
             abrirModalObligaciones(info.event.extendedProps.fecha, info.event.extendedProps.items);
         },

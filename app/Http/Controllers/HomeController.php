@@ -166,6 +166,14 @@ class HomeController extends Controller
     }
 
 
+    public function obligacionesPorMes(Request $request)
+    {
+        $user = Auth::user();
+        $year  = (int) $request->query('year',  now()->year);
+        $month = (int) $request->query('month', now()->month);
+        return response()->json($this->getObligacionesCalendario($user, $year, $month));
+    }
+
     protected function getObligacionesCalendario($user, $year, $month)
     {
         return Obligacion::with(['cliente', 'tipoObligacion', 'catalogoServicio'])

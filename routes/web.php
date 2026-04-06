@@ -63,6 +63,7 @@ Route::middleware(['auth'])->group(function () {
 Route::group(['middleware'=> ['auth']],function(){
 
     Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+    Route::get('/home/obligaciones', [HomeController::class, 'obligacionesPorMes'])->name('home.obligaciones');
 
     
     Route::resource('usuarios', UsuarioController::class);
