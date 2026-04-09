@@ -519,7 +519,7 @@ class TareaController extends Controller
             $numero = '593' . substr($numero, 1); // Ecuador
         }
     
-        $baseUrl = rtrim(env('WHATSAPP_API_URL'), '/');
+        $baseUrl = rtrim(config('services.whatsapp.url'), '/');
         $mensaje  = $request->input('mensaje');
         $tieneArchivo = $tarea->archivo && Storage::disk('public')->exists($tarea->archivo);
 
@@ -543,7 +543,7 @@ class TareaController extends Controller
 
         try {
             $response = Http::withHeaders([
-                'x-api-key'    => env('WHATSAPP_API_TOKEN'),
+                'x-api-key'    => config('services.whatsapp.token'),
                 'Content-Type' => 'application/json',
             ])
             ->timeout(60)

@@ -116,7 +116,7 @@ class ObligacionesController extends Controller // <- renombrado de Vencimientos
             $numero = '593' . substr($numero, 1);
         }
 
-        $urlText = rtrim(env('WHATSAPP_API_URL'), '/') . '/send-message';
+        $urlText = rtrim(config('services.whatsapp.url'), '/') . '/send-message';
         $mensaje = $request->input('mensaje');
 
         $payload = [
@@ -126,7 +126,7 @@ class ObligacionesController extends Controller // <- renombrado de Vencimientos
 
         try {
             $response = Http::withHeaders([
-                'x-api-key'    => env('WHATSAPP_API_TOKEN'),
+                'x-api-key'    => config('services.whatsapp.token'),
                 'Content-Type' => 'application/json',
             ])
             ->timeout(30)

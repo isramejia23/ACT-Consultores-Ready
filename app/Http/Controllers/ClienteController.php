@@ -336,7 +336,7 @@ class ClienteController extends Controller
             $numero = '593' . substr($numero, 1); // Ecuador
         }
 
-        $urlText = rtrim(env('WHATSAPP_API_URL'), '/') . '/send-message';
+        $urlText = rtrim(config('services.whatsapp.url'), '/') . '/send-message';
         $mensaje = $request->input('mensaje');
 
         $payload = [
@@ -346,7 +346,7 @@ class ClienteController extends Controller
 
         try {
             $response = Http::withHeaders([
-                'x-api-key'    => env('WHATSAPP_API_TOKEN'),
+                'x-api-key'    => config('services.whatsapp.token'),
                 'Content-Type' => 'application/json',
             ])
             ->timeout(30)
