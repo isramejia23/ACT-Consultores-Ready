@@ -50,19 +50,39 @@ class TareaCargadaController extends Controller
         ]);
         
         $archivoExcel = $request->file('archivo');
-        $spreadsheet = IOFactory::load($archivoExcel->getPathname());
+        $rutaTmp = $archivoExcel->getPathname();
+
+        try {
+            $tipoLector = IOFactory::identify($rutaTmp);
+            $lector = IOFactory::createReader($tipoLector);
+            $nivelError = error_reporting(E_ALL & ~E_WARNING & ~E_NOTICE);
+            $spreadsheet = $lector->load($rutaTmp);
+            error_reporting($nivelError);
+        } catch (\Exception $e) {
+            error_reporting($nivelError ?? E_ALL);
+            return redirect()->back()->with('error', 'No se pudo leer el archivo Excel: ' . $e->getMessage());
+        }
+
         $hoja = $spreadsheet->getActiveSheet();
         $datos = $hoja->toArray(null, true, true, true);
         
         // Inicializar arrays
         $datosProcesados = [];
         $registrosDuplicados = 0;
+        $omitidosCodigo = 0;
         
-        // Obtener registros existentes en tareas_cargadas para comparación
+        // Obtener registros existentes en tareas_cargadas para comparación (trim para evitar espacios)
         $existentes = TareaCargada::select('codigo', 'numfac', 'cedula')
             ->get()
             ->keyBy(function($item) {
-                return $item->codigo . '|' . $item->numfac . '|' . $item->cedula;
+                return trim($item->codigo) . '|' . trim($item->numfac) . '|' . trim($item->cedula);
+            });
+
+        // Obtener tareas ya creadas para evitar duplicados de importaciones previas
+        $tareasExistentes = Tarea::select('nombre', 'numero_factura')
+            ->get()
+            ->keyBy(function($item) {
+                return trim($item->nombre) . '|' . trim($item->numero_factura);
             });
         
         foreach ($datos as $index => $dato) {
@@ -77,12 +97,14 @@ class TareaCargadaController extends Controller
             
             // Verificar si el nombre es prohibidos SE Evita SUBIR COMISIONES BANCARIAS
             if (in_array(strtoupper(trim($dato['F'])), $CodigosDeTareasNoPermitidos)) {
+                $omitidosCodigo++;
                 continue;
             }
             
-            // Verificar duplicados en tareas_cargadas
-            $claveUnica = $dato['F'] . '|' . $dato['B'] . '|' . $dato['M'];
-            if ($existentes->has($claveUnica)) {
+            // Verificar duplicados en tareas_cargadas y en tareas ya creadas
+            $claveUnica = trim($dato['F']) . '|' . trim($dato['B']) . '|' . trim($dato['M']);
+            $claveTarea = trim($dato['G']) . '|' . trim($dato['B']);
+            if ($existentes->has($claveUnica) || $tareasExistentes->has($claveTarea)) {
                 $registrosDuplicados++;
                 continue;
             }
@@ -142,19 +164,33 @@ class TareaCargadaController extends Controller
 
             // Procesar tareas cargadas: crear facturas y tareas para clientes existentes
             $importService = app(TareaImportService::class);
-            $importService->procesarDesdeDatosImportados($datosProcesados);
+            $resultado = $importService->procesarDesdeDatosImportados($datosProcesados);
+            $tareasCreadas   = $resultado['tareas_creadas'];
+            $facturasCreadas = $resultado['facturas_creadas'];
 
             DB::commit();
+
+            // Vincular automáticamente las tareas recién creadas con sus obligaciones
+            $mesesUnicos = collect($datosProcesados)
+                ->filter(fn($d) => !empty($d['fecha']))
+                ->map(fn($d) => \Carbon\Carbon::parse($d['fecha'])->format('n') . '|' . \Carbon\Carbon::parse($d['fecha'])->format('Y'))
+                ->unique();
+
+            foreach ($mesesUnicos as $clave) {
+                [$mes, $anio] = explode('|', $clave);
+                \Artisan::call('tareas:vincular-obligaciones', ['mes' => $mes, 'anio' => $anio]);
+            }
+
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect()->back()->with('error', 'Error al importar: ' . $e->getMessage());
         }
 
-        // Mensaje personalizado
-        $mensaje = 'Datos importados y procesados correctamente.';
-        if ($registrosDuplicados > 0) {
-            $mensaje .= " Se omitieron $registrosDuplicados registros duplicados.";
-        }
+        $sinCliente = count($datosProcesados) - $tareasCreadas;
+        $mensaje = "Importación completa: {$tareasCreadas} tareas creadas, {$facturasCreadas} facturas creadas.";
+        $mensaje .= $registrosDuplicados > 0 ? " {$registrosDuplicados} duplicados omitidos." : '';
+        $mensaje .= $omitidosCodigo > 0     ? " {$omitidosCodigo} omitidos por código prohibido." : '';
+        $mensaje .= $sinCliente > 0         ? " {$sinCliente} en espera (cliente no encontrado en el sistema)." : '';
 
         return redirect()->back()->with('success', $mensaje);
     }

@@ -383,12 +383,21 @@ class TareaController extends Controller
                 'archivo' => $archivoPath,
             ]);
 
-            // === AUTO-COMPLETAR OBLIGACION VINCULADA ===
-            if ($request->estado === 'Cumplida' && $tarea->obligacion_id) {
-                $tarea->obligacion()->update([
-                    'completado' => true,
-                    'completado_en' => now(),
-                ]);
+            // === SINCRONIZAR OBLIGACION VINCULADA ===
+            if ($tarea->obligacion_id) {
+                if ($request->estado === 'Cumplida') {
+                    $tarea->obligacion()->update([
+                        'completado'    => true,
+                        'completado_en' => now(),
+                        'estado'        => 'completada',
+                    ]);
+                } elseif ($request->estado === 'Anulada') {
+                    $tarea->obligacion()->update(['estado' => 'anulada']);
+                } elseif (in_array($request->estado, ['Pendiente', 'En Proceso'])) {
+                    $tarea->obligacion()
+                        ->whereIn('estado', ['completada', 'anulada'])
+                        ->update(['estado' => 'pendiente', 'completado' => false, 'completado_en' => null]);
+                }
             }
 
             // === ACTUALIZAR SALDO DEL CLIENTE (si se pasó) ===

@@ -40,15 +40,13 @@ class TareaImportService
                     $totalFactura = $tareasPorFactura[$tareaCargada->numfac]->sum('total');
 
                     $factura = Factura::firstOrCreate(
+                        ['numero_factura' => $tareaCargada->numfac],
                         [
-                            'numero_factura' => $tareaCargada->numfac,
-                            'cliente_id' => $cliente->id_clientes,
-                        ],
-                        [
-                            'fecha_factura' => $tareaCargada->fecha,
-                            'total_factura' => $totalFactura,
+                            'cliente_id'      => $cliente->id_clientes,
+                            'fecha_factura'   => $tareaCargada->fecha,
+                            'total_factura'   => $totalFactura,
                             'saldo_pendiente' => $totalFactura,
-                            'estado_pago' => 'Pendiente',
+                            'estado_pago'     => 'Pendiente',
                         ]
                     );
 
@@ -61,8 +59,7 @@ class TareaImportService
 
                 // Crear tarea si no existe duplicada
                 $tareaExistente = Tarea::where('numero_factura', $tareaCargada->numfac)
-                    ->where('nombre', $tareaCargada->nombre)
-                    ->where('id_clientes', $cliente->id_clientes)
+                    ->whereRaw('TRIM(nombre) = ?', [trim($tareaCargada->nombre)])
                     ->exists();
 
                 if (!$tareaExistente) {
@@ -71,20 +68,21 @@ class TareaImportService
                     );
 
                     Tarea::create([
-                        'id_clientes' => $cliente->id_clientes,
-                        'id_usuario' => $cliente->id_usuario,
-                        'id_factura' => $facturaIds[$tareaCargada->numfac],
+                        'id_clientes'    => $cliente->id_clientes,
+                        'id_usuario'     => $cliente->id_usuario,
+                        'id_factura'     => $facturaIds[$tareaCargada->numfac],
                         'numero_factura' => $tareaCargada->numfac,
-                        'fecha_facturada' => $tareaCargada->fecha,
-                        'estado' => 'Pendiente',
-                        'nombre' => $tareaCargada->nombre,
+                        'fecha_facturada'=> $tareaCargada->fecha,
+                        'estado'         => 'Pendiente',
+                        'nombre'         => $tareaCargada->nombre,
+                        'codigo_servicio'=> $tareaCargada->codigo,
                         'fecha_cumplida' => null,
-                        'archivo' => null,
-                        'cantidad' => $tareaCargada->cant,
-                        'precio_unitario' => $tareaCargada->p_u,
-                        'total' => $tareaCargada->total,
-                        'observacion' => null,
-                        'obligacion_id' => $obligacionId,
+                        'archivo'        => null,
+                        'cantidad'       => $tareaCargada->cant,
+                        'precio_unitario'=> $tareaCargada->p_u,
+                        'total'          => $tareaCargada->total,
+                        'observacion'    => null,
+                        'obligacion_id'  => $obligacionId,
                     ]);
                     $tareasCreadas++;
                 }
@@ -124,36 +122,53 @@ class TareaImportService
 
     /**
      * Busca una obligación que coincida con el servicio facturado usando el catálogo.
+     *
+     * El período se determina desde tipos_obligacion.mes_vencimiento (configurado en BD),
+     * no desde la fecha_facturada. Esto garantiza que facturas tardías encuentren
+     * la obligación del mes correcto sin saltar a una futura.
      */
     protected function buscarObligacionParaTarea(Cliente $cliente, string $codigoServicio, ?string $fechaTarea): ?int
     {
-        // 1. Buscar en el catálogo de servicios por el código
         $servicio = \App\Models\CatalogoServicio::where('codigo', trim($codigoServicio))->first();
 
         if (!$servicio) {
             return null;
         }
 
-        // 2. Buscar la obligación pendiente de este cliente (que no esté completada)
-        // vinculada a este servicio por régimen, servicio extra, o creada manualmente desde catálogo
+        $periodo = $this->calcularPeriodoPorServicio($servicio->id, $fechaTarea);
+
         $obligacion = Obligacion::where('cliente_id', $cliente->id_clientes)
-            ->where('completado', false)
+            ->where('periodo', $periodo)
             ->where(function($query) use ($servicio) {
-                // Obligación manual creada directamente desde el catálogo
                 $query->where('catalogo_servicio_id', $servicio->id)
-                // Obligación generada por el régimen
-                ->orWhereHas('tipoObligacion', function($q) use ($servicio) {
-                    $q->where('catalogo_servicio_id', $servicio->id);
-                })
-                // O la obligación generada por un servicio extra contratado
-                ->orWhereHas('clienteServicio', function($q) use ($servicio) {
-                    $q->where('catalogo_servicio_id', $servicio->id);
-                });
+                    ->orWhereHas('tipoObligacion', fn($q) => $q->where('catalogo_servicio_id', $servicio->id))
+                    ->orWhereHas('clienteServicio', fn($q) => $q->where('catalogo_servicio_id', $servicio->id));
             })
-            // Tomamos la obligación más antigua no completada primero
             ->orderBy('fecha_vencimiento', 'asc')
             ->first();
 
         return $obligacion?->id;
+    }
+
+    /**
+     * Determina el período de obligación para un catalogo_servicio_id dado.
+     * Consulta tipos_obligacion.mes_vencimiento desde la BD.
+     * Fallback: mes de la fecha_facturada.
+     */
+    private function calcularPeriodoPorServicio(int $catalogoId, ?string $fechaTarea): string
+    {
+        $baseDate = $fechaTarea ? \Carbon\Carbon::parse($fechaTarea) : now();
+
+        $mesCobro = \Illuminate\Support\Facades\DB::table('tipos_obligacion')
+            ->where('catalogo_servicio_id', $catalogoId)
+            ->whereNotNull('mes_vencimiento')
+            ->whereNull('deleted_at')
+            ->value('mes_vencimiento');
+
+        if ($mesCobro === null) {
+            return $baseDate->format('Y-m');
+        }
+
+        return sprintf('%04d-%02d', $baseDate->year, $mesCobro);
     }
 }

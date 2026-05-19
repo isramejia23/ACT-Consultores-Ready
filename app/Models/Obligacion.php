@@ -53,6 +53,11 @@ class Obligacion extends Model
         return $this->belongsTo(ClienteServicio::class, 'cliente_servicio_id');
     }
 
+    public function tareas()
+    {
+        return $this->hasMany(Tarea::class, 'obligacion_id');
+    }
+
     public function getNombreObligacionAttribute()
     {
         if ($this->tipoObligacion) {

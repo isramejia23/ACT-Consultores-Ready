@@ -158,16 +158,27 @@ class GeneradorVencimientos
     protected function crearRegistroObligacion(Cliente $cliente, TipoObligacion $tipoObligacion, Carbon $fechaVencimiento)
     {
         try {
+            $periodo = $fechaVencimiento->format('Y-m');
+
+            // Verificar si ya existe una obligación para este período y servicio,
+            // ya sea por tipo_obligacion_id o por catalogo_servicio_id.
+            // Esto evita duplicados cuando vincular ya creó una obligación catalog-based
+            // antes de que corriera el cron.
             $existe = Obligacion::where('cliente_id', $cliente->id_clientes)
-                ->where('tipo_obligacion_id', $tipoObligacion->id)
-                ->where('periodo', $fechaVencimiento->format('Y-m'))
+                ->where('periodo', $periodo)
+                ->where(function($q) use ($tipoObligacion) {
+                    $q->where('tipo_obligacion_id', $tipoObligacion->id);
+                    if ($tipoObligacion->catalogo_servicio_id) {
+                        $q->orWhere('catalogo_servicio_id', $tipoObligacion->catalogo_servicio_id);
+                    }
+                })
                 ->exists();
 
             if (!$existe) {
                 Obligacion::create([
                     'cliente_id'         => $cliente->id_clientes,
                     'tipo_obligacion_id' => $tipoObligacion->id,
-                    'periodo'            => $fechaVencimiento->format('Y-m'),
+                    'periodo'            => $periodo,
                     'fecha_vencimiento'  => $fechaVencimiento,
                     'completado'         => false,
                     'generado_en'        => now(),

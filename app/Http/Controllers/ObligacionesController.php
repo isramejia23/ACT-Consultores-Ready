@@ -157,10 +157,18 @@ class ObligacionesController extends Controller // <- renombrado de Vencimientos
         $obligacion = Obligacion::findOrFail($id);
 
         $obligacion->update([
-            'completado' => true,
+            'completado'    => true,
             'completado_en' => now(),
-            'estado' => 'completada',
+            'estado'        => 'completada',
         ]);
+
+        // Marcar como Cumplidas las tareas vinculadas que aún no lo estén
+        $obligacion->tareas()
+            ->whereIn('estado', ['Pendiente', 'En Proceso'])
+            ->update([
+                'estado'         => 'Cumplida',
+                'fecha_cumplida' => now()->toDateString(),
+            ]);
 
         if ($request->ajax()) {
             return response()->json(['success' => true, 'message' => 'Obligación completada']);
@@ -176,6 +184,11 @@ class ObligacionesController extends Controller // <- renombrado de Vencimientos
         $obligacion->update([
             'estado' => 'anulada',
         ]);
+
+        // Anular las tareas vinculadas que no estén ya cumplidas
+        $obligacion->tareas()
+            ->whereNotIn('estado', ['Cumplida', 'Anulada'])
+            ->update(['estado' => 'Anulada']);
 
         if ($request->ajax()) {
             return response()->json(['success' => true, 'message' => 'Obligación anulada']);
