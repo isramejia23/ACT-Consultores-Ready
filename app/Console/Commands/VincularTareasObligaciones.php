@@ -8,6 +8,7 @@ use App\Models\Tarea;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class VincularTareasObligaciones extends Command
 {
@@ -17,15 +18,6 @@ class VincularTareasObligaciones extends Command
 
     protected $description = 'Vincula tareas del período a sus obligaciones existentes (no crea obligaciones)';
 
-    private const CODIGOS_CON_OBLIGACION = [
-        '10001','10002','10003','10004','10005','10006',
-        '10007','10008','10009','10010','10011','10012',
-        '10021','10022','10023','10024','10025','10026',
-        '10027','10028','10029','10030','10031','10032',
-        '10017','10033','10034','10036','10054',
-        '50002','10056','10057','10055','10060',
-    ];
-
     public function handle(): int
     {
         $mes  = (int) $this->argument('mes');
@@ -33,11 +25,37 @@ class VincularTareasObligaciones extends Command
 
         $this->info("Vinculando tareas del mes {$mes}/{$anio}...");
 
+        // Fuentes reales de qué servicios tienen obligaciones:
+        // 1. tipos_obligacion (régimen) y 2. obligaciones manuales por cliente
+        $idsDeTipos = DB::table('tipos_obligacion')
+            ->whereNotNull('catalogo_servicio_id')
+            ->whereNull('deleted_at')
+            ->pluck('catalogo_servicio_id')
+            ->unique();
+
+        $idsDeObligaciones = DB::table('obligaciones')
+            ->whereNotNull('catalogo_servicio_id')
+            ->pluck('catalogo_servicio_id')
+            ->unique();
+
+        $todosIds = $idsDeTipos->merge($idsDeObligaciones)->unique()->values();
+
+        $codigosConObligacion = CatalogoServicio::whereIn('id', $todosIds)
+            ->pluck('codigo')
+            ->toArray();
+
+        if (empty($codigosConObligacion)) {
+            $this->warn('No hay servicios con tipos_obligacion ni obligaciones manuales en BD.');
+            return self::SUCCESS;
+        }
+
+        $this->info('Servicios con obligaciones en BD: ' . count($codigosConObligacion));
+
         $tareas = Tarea::whereYear('fecha_facturada', $anio)
             ->whereMonth('fecha_facturada', $mes)
             ->whereNull('obligacion_id')
             ->whereNotNull('codigo_servicio')
-            ->whereIn('codigo_servicio', self::CODIGOS_CON_OBLIGACION)
+            ->whereIn('codigo_servicio', $codigosConObligacion)
             ->with(['cliente'])
             ->get();
 
@@ -48,7 +66,7 @@ class VincularTareasObligaciones extends Command
 
         $this->info("Tareas encontradas sin obligación: {$tareas->count()}");
 
-        $catalogo = CatalogoServicio::whereIn('codigo', self::CODIGOS_CON_OBLIGACION)
+        $catalogo = CatalogoServicio::whereIn('codigo', $codigosConObligacion)
             ->pluck('id', 'codigo');
 
         // Mes de cobro esperado por catalogo_servicio_id (desde tipos_obligacion.mes_vencimiento)
@@ -74,9 +92,14 @@ class VincularTareasObligaciones extends Command
             $catalogoId = $catalogo[$tarea->codigo_servicio] ?? null;
             if (!$catalogoId) continue;
 
-            $taskYear   = Carbon::parse($tarea->fecha_facturada)->year;
+            $fechaTarea = Carbon::parse($tarea->fecha_facturada);
             $periodoMes = $mesCobro[$catalogoId] ?? $mes;
-            $periodo    = sprintf('%04d-%02d', $taskYear, $periodoMes);
+            // Si el mes de vencimiento ya pasó en el año de la factura, la obligación es del año siguiente
+            $taskYear = $fechaTarea->year;
+            if (isset($mesCobro[$catalogoId]) && $periodoMes < $fechaTarea->month) {
+                $taskYear++;
+            }
+            $periodo = sprintf('%04d-%02d', $taskYear, $periodoMes);
 
             $obligacion = Obligacion::where('cliente_id', $cliente->id_clientes)
                 ->where('periodo', $periodo)
@@ -90,6 +113,7 @@ class VincularTareasObligaciones extends Command
 
             if (!$obligacion) {
                 $sinObligacion++;
+                $this->warn("  Sin obligacion: tarea #{$tarea->id_tareas} | cliente {$cliente->id_clientes} ({$cliente->nombre_cliente}) | codigo {$tarea->codigo_servicio} | periodo {$periodo}");
                 continue;
             }
 

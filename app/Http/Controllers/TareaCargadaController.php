@@ -176,9 +176,19 @@ class TareaCargadaController extends Controller
                 ->map(fn($d) => \Carbon\Carbon::parse($d['fecha'])->format('n') . '|' . \Carbon\Carbon::parse($d['fecha'])->format('Y'))
                 ->unique();
 
+            $totalVinculadas    = 0;
+            $totalSinObligacion = 0;
+
             foreach ($mesesUnicos as $clave) {
                 [$mes, $anio] = explode('|', $clave);
                 \Artisan::call('tareas:vincular-obligaciones', ['mes' => $mes, 'anio' => $anio]);
+                $salida = \Artisan::output();
+                if (preg_match('/Tareas vinculadas\s*:\s*(\d+)/u', $salida, $m)) {
+                    $totalVinculadas += (int) $m[1];
+                }
+                if (preg_match('/Sin obligaci[oó]n existente:\s*(\d+)/u', $salida, $m)) {
+                    $totalSinObligacion += (int) $m[1];
+                }
             }
 
         } catch (\Exception $e) {
@@ -188,6 +198,8 @@ class TareaCargadaController extends Controller
 
         $sinCliente = count($datosProcesados) - $tareasCreadas;
         $mensaje = "Importación completa: {$tareasCreadas} tareas creadas, {$facturasCreadas} facturas creadas.";
+        $mensaje .= $totalVinculadas > 0    ? " {$totalVinculadas} vinculadas a obligaciones." : '';
+        $mensaje .= $totalSinObligacion > 0 ? " {$totalSinObligacion} sin obligación (correr vencimientos:generar primero)." : '';
         $mensaje .= $registrosDuplicados > 0 ? " {$registrosDuplicados} duplicados omitidos." : '';
         $mensaje .= $omitidosCodigo > 0     ? " {$omitidosCodigo} omitidos por código prohibido." : '';
         $mensaje .= $sinCliente > 0         ? " {$sinCliente} en espera (cliente no encontrado en el sistema)." : '';

@@ -57,6 +57,65 @@ class GeneradorVencimientos
     }
 
     /**
+     * Genera obligaciones para un cliente en un mes/año concreto.
+     * Base reutilizable para generarParaCliente y generarParaClienteAnioCompleto.
+     */
+    public function generarParaClienteEnMes(Cliente $cliente, int $mes, int $anio): int
+    {
+        if ($cliente->estado !== 'Activo') {
+            return 0;
+        }
+
+        $generadas = 0;
+
+        $cliente->loadMissing('regimen.tiposObligacion');
+
+        if ($cliente->regimen) {
+            foreach ($cliente->regimen->tiposObligacion as $tipoObligacion) {
+                $fechaVencimiento = $this->calcularVencimientoParaMes($cliente, $tipoObligacion, $mes, $anio);
+
+                if ($fechaVencimiento && $this->debeGenerarEnMes($tipoObligacion, $mes)) {
+                    $this->crearRegistroObligacion($cliente, $tipoObligacion, $fechaVencimiento);
+                    $generadas++;
+                }
+            }
+        }
+
+        $generadas += $this->regenerarObligacionesManuales($cliente, $mes, $anio);
+
+        return $generadas;
+    }
+
+    /**
+     * Genera obligaciones para un cliente desde el inicio del año (o desde fecha_firma)
+     * hasta el mes actual. Úsese al crear o cambiar el régimen de un cliente.
+     * Solo opera sobre el cliente indicado, no sobre todos los clientes.
+     */
+    public function generarParaClienteAnioCompleto(Cliente $cliente, int $anio): int
+    {
+        if ($cliente->estado !== 'Activo') {
+            return 0;
+        }
+
+        $mesInicio = 1;
+        if (!empty($cliente->fecha_firma)) {
+            $firma = Carbon::parse($cliente->fecha_firma);
+            if ((int) $firma->year === $anio) {
+                $mesInicio = (int) $firma->month;
+            }
+        }
+
+        $mesFin = ($anio === (int) now()->year) ? (int) now()->month : 12;
+
+        $generadas = 0;
+        for ($mes = $mesInicio; $mes <= $mesFin; $mes++) {
+            $generadas += $this->generarParaClienteEnMes($cliente, $mes, $anio);
+        }
+
+        return $generadas;
+    }
+
+    /**
      * Genera obligaciones para un mes/año específico (llamado desde el controller manual).
      */
     public function generarParaMes(int $mes, int $anio): int
@@ -93,15 +152,21 @@ class GeneradorVencimientos
         $periodo = sprintf('%04d-%02d', $anio, $mes);
 
         // Obtener las obligaciones manuales distintas de este cliente
+        // mes_obligacion extrae el mes del vencimiento original para comparar en anuales
         $manuales = Obligacion::where('cliente_id', $cliente->id_clientes)
             ->whereNotNull('catalogo_servicio_id')
             ->whereNotNull('periodicidad')
-            ->select('catalogo_servicio_id', 'periodicidad', 'dia_vencimiento')
+            ->select(
+                'catalogo_servicio_id',
+                'periodicidad',
+                'dia_vencimiento',
+                \Illuminate\Support\Facades\DB::raw('MONTH(fecha_vencimiento) as mes_obligacion')
+            )
             ->distinct()
             ->get();
 
         foreach ($manuales as $manual) {
-            if ($manual->periodicidad === 'anual' && $mes !== 12) {
+            if ($manual->periodicidad === 'anual' && $mes !== (int) $manual->mes_obligacion) {
                 continue;
             }
 

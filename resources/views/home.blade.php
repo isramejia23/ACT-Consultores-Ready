@@ -593,7 +593,10 @@ document.addEventListener('DOMContentLoaded', function() {
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             })
-            .then(function(res) { return res.json(); })
+            .then(function(res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
             .then(function(data) {
                 if (data.success) {
                     // Actualizar en el array local
@@ -611,10 +614,15 @@ document.addEventListener('DOMContentLoaded', function() {
                     if (modal) modal.hide();
 
                     Swal.fire({ icon: 'success', title: 'Completada', showConfirmButton: false, timer: 1200 });
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'No se pudo completar la obligación' });
                 }
             })
-            .catch(function() {
-                Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo completar la obligación' });
+            .catch(function(err) {
+                var msg = (err && err.message && err.message.indexOf('419') !== -1)
+                    ? 'La sesión expiró. Recarga la página e intenta de nuevo.'
+                    : 'No se pudo completar la obligación';
+                Swal.fire({ icon: 'error', title: 'Error', text: msg });
             });
         });
     };

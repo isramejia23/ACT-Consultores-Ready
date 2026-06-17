@@ -169,6 +169,12 @@ class TareaImportService
             return $baseDate->format('Y-m');
         }
 
-        return sprintf('%04d-%02d', $baseDate->year, $mesCobro);
+        // Si el mes de vencimiento ya pasó en el año de la factura, la obligación es del año siguiente
+        $anio = $baseDate->year;
+        if ($mesCobro < $baseDate->month) {
+            $anio++;
+        }
+
+        return sprintf('%04d-%02d', $anio, $mesCobro);
     }
 }

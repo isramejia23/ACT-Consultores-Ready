@@ -25,6 +25,7 @@ class Tarea extends Model
         'fecha_facturada',
         'estado',
         'nombre',
+        'codigo_servicio',
         'fecha_cumplida',
         'archivo',
         'cantidad',

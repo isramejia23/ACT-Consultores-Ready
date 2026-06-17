@@ -172,13 +172,20 @@ class ClienteController extends Controller
                 'id_usuario' => $request->id_usuario,
             ]);
 
-            // Procesar tareas cargadas: crear facturas, tareas y limpiar tareas_cargadas
-            $importService = app(TareaImportService::class);
-            $importService->procesarTareasCargadas($cliente);
+            // Capturar los meses de las tareas pendientes ANTES de procesarlas (se eliminan al procesar)
+            $mesesPendientes = \App\Models\TareaCargada::where('cedula', $cliente->cedula_cliente)
+                ->whereNotNull('fecha')
+                ->get()
+                ->map(fn($t) => \Carbon\Carbon::parse($t->fecha)->format('n') . '|' . \Carbon\Carbon::parse($t->fecha)->format('Y'))
+                ->unique();
 
-            // Generar obligaciones automáticas del régimen para el mes actual
+            // Generar obligaciones del régimen PRIMERO para que las tareas puedan vincularse
             $generador = app(GeneradorVencimientos::class);
             $generador->generarParaCliente($cliente);
+
+            // Procesar tareas cargadas: ahora las obligaciones del mes actual ya existen
+            $importService = app(TareaImportService::class);
+            $importService->procesarTareasCargadas($cliente);
 
             DB::commit();
         } catch (\Exception $e) {
@@ -186,6 +193,12 @@ class ClienteController extends Controller
             return redirect()->route('clientes.create')
                 ->withInput()
                 ->with('error', 'Error al crear el cliente: ' . $e->getMessage());
+        }
+
+        // Vincular tareas de meses anteriores donde las obligaciones ya existían en BD
+        foreach ($mesesPendientes as $clave) {
+            [$mes, $anio] = explode('|', $clave);
+            \Artisan::call('tareas:vincular-obligaciones', ['mes' => $mes, 'anio' => $anio]);
         }
 
         return redirect()->route('clientes.show', $cliente->id_clientes)->with('success', 'Cliente creado con éxito. Puede agregar obligaciones específicas desde aquí.');

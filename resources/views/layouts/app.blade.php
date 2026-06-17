@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <link rel="icon" type="image/png" href="{{ asset('imagenes/logo.png') }}" >
     <title>ACT Consultores</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -550,15 +551,23 @@
                         'X-Requested-With': 'XMLHttpRequest'
                     }
                 })
-                .then(function(res) { return res.json(); })
+                .then(function(res) {
+                    if (!res.ok) throw new Error('HTTP ' + res.status);
+                    return res.json();
+                })
                 .then(function(data) {
                     if (data.success) {
                         Swal.fire({ icon: 'success', title: 'Anulada', showConfirmButton: false, timer: 1200 });
                         if (typeof callback === 'function') callback(id);
+                    } else {
+                        Swal.fire({ icon: 'error', title: 'Error', text: data.message || 'No se pudo anular la obligación' });
                     }
                 })
-                .catch(function() {
-                    Swal.fire({ icon: 'error', title: 'Error', text: 'No se pudo anular la obligación' });
+                .catch(function(err) {
+                    var msg = (err && err.message && err.message.indexOf('419') !== -1)
+                        ? 'La sesión expiró. Recarga la página e intenta de nuevo.'
+                        : 'No se pudo anular la obligación';
+                    Swal.fire({ icon: 'error', title: 'Error', text: msg });
                 });
             });
         }
